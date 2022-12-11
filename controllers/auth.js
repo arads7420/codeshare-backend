@@ -1,11 +1,104 @@
-export const register = (req, res) => {
+const {prisma} = require('../utils/prisma.js')
+const jwt = require('jsonwebtoken')
+const bcrypt = require('bcryptjs');
+const e = require('express');
+require('dotenv').config();
 
-    // Check if user exists
+
+
+const register = async (req, res) => {   
+    const { username, password, name, email } = req.body
+
+    // Check if the username already exists
+    let user = await prisma.user.findUnique({ 
+        where: {
+            username: username
+        }
+    });
+
+    if (user) {
+      return res.status(400).json({ error: 'Username already exists' })
+    }
+
+    user = await prisma.user.findUnique({ 
+        where: {
+            email: email
+        }
+    });
+
+    if (user) {
+        return res.status(400).json({ error: 'Email already exists' })
+    }
+  
+    // Salt and hash the password
+    const salt = bcrypt.genSaltSync(10)
+    const hashedPassword = bcrypt.hashSync(password, salt)
 
     // Create a new user
-        // Hash the password
+    const newUser = await prisma.user.create({
+        data: {
+            username,
+            password: hashedPassword,
+            name,
+            email
+        }
+    });
+  
+    // Generate a JSON web token for the new user
+    const token = jwt.sign({id: newUser.id}, process.env.ACCESS_TOKEN_SECRET);
+  
+    return res.json({
+      message: "User has been created",
+      token
+    });
 }
 
-export const login = (req, res) => {} 
+const login = async (req, res) => {
+    const { username, password }  = req.body
 
-export const logout = (req, res) => {} 
+    // Check if the username exists
+    const user = await prisma.user.findUnique({ 
+        where: {
+            username: username
+        }
+    });
+
+    if(!user) {
+        return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Check for valid password
+    const checkPassword = bcrypt.compareSync(password, user.password)
+    if (!checkPassword) {
+        return res.status(400).json({ error: 'Invalid username or password' });
+    }
+
+    // Generate a JSON web token for the new user
+    const token = jwt.sign({id: user.id}, process.env.ACCESS_TOKEN_SECRET);
+
+    delete user.password
+
+    res.cookie("accessToken", token, {
+        httpOnly: true,
+    })
+    .status(200)
+    .json(user)
+} 
+
+const logout = (req, res) => {
+    res.clearCookie("accessToken", {
+        secure: true,
+        sameSite: "none"
+    })
+    .status(200)
+    .json({
+        message: "User has been logged out"
+    })
+} 
+
+
+module.exports = {
+    register,
+    login,
+    logout
+}
