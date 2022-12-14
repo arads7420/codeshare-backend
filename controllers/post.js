@@ -179,7 +179,7 @@ const updatePost = async (req, res) => {
                     },
                     category: {
                         connect: {
-                            id: parseInt(data.category.id, 10)
+                            id: parseInt(data.category, 10)
                         }
                     },
                 },
