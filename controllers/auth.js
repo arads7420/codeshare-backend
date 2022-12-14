@@ -1,13 +1,12 @@
 const {prisma} = require('../utils/prisma.js')
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcryptjs');
-const e = require('express');
 require('dotenv').config();
 
 
 
 const register = async (req, res) => {   
-    const { username, password, name, email } = req.body
+    const { username, password, email } = req.body
 
     // Check if the username already exists
     let user = await prisma.user.findUnique({ 
@@ -39,18 +38,20 @@ const register = async (req, res) => {
         data: {
             username,
             password: hashedPassword,
-            name,
             email
         }
     });
   
+    delete newUser.password
+    
     // Generate a JSON web token for the new user
     const token = jwt.sign({id: newUser.id}, process.env.ACCESS_TOKEN_SECRET);
-  
-    return res.json({
-      message: "User has been created",
-      token
-    });
+    
+    res.cookie("accessToken", token, {
+        httpOnly: true,
+    })
+    .status(200)
+    .json(newUser)
 }
 
 const login = async (req, res) => {
@@ -64,7 +65,7 @@ const login = async (req, res) => {
     });
 
     if(!user) {
-        return res.status(401).json({ error: 'User not found' });
+        return res.status(400).json({ error: 'User not found' });
     }
 
     // Check for valid password
